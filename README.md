@@ -80,6 +80,13 @@ Higher-order / structural search over the mutation graph:
 ./perturb mymodule.py --test 'pytest -q' --ca --ca-lattice ndim
 ```
 
+A structured, reproducible report -- stable content-derived ids, spans, a diff and a
+reproduction command per mutant (see [docs/output.md](docs/output.md)):
+
+```sh
+./perturb mymodule.py --test 'pytest -q' --report mutation.json
+```
+
 ## It passes its own mutation test
 
 `./perturb --selftest` runs 41 discrimination cases: every family fires and compiles a valid mutant,

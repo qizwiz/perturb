@@ -43,8 +43,10 @@ architecture -- 1-D, n-D and the graph are the same parity engine over different
 """
 
 import argparse
+import hashlib
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -719,7 +721,59 @@ def ca_sweep(
     return 0
 
 
-def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False):
+def _mutant_record(path, lang, test_cmd, src, start, end, repl, fam, label, verdict, secs):
+    """One mutant as a stable, reproducible record. The id is content-derived (file+span+
+    replacement), so the SAME mutant gets the SAME id across runs and machines."""
+    mid = hashlib.sha1(("%s:%d:%d:%s" % (path, start, end, repl)).encode()).hexdigest()[:12]
+    line_no = src[:start].count(b"\n") + 1
+    ls = src.rfind(b"\n", 0, start) + 1
+    le = src.find(b"\n", end)
+    le = len(src) if le == -1 else le
+    oline = src[ls:le].decode("utf-8", "replace")
+    mline = (src[ls:start] + repl.encode() + src[end:le]).decode("utf-8", "replace")
+    repro = "perturb %s --lang %s --lines %d:%d --families %s --test %s" % (
+        path, lang, line_no, line_no, fam.split(":")[0], shlex.quote(test_cmd))
+    return {
+        "id": mid,
+        "family": fam,
+        "file": path,
+        "span": {"start": start, "end": end},
+        "line": line_no,
+        "original": src[start:end].decode("utf-8", "replace"),
+        "replacement": repl,
+        "label": label,
+        "status": verdict,
+        "oracle_seconds": secs,
+        "diff": "@@ L%d @@\n- %s\n+ %s" % (line_no, oline, mline),
+        "reproduction": repro,
+    }
+
+
+def _write_report(path_out, target, lang, test_cmd, fam_stats, killed, scored, records):
+    """Stable content-derived ids + sorted keys: the mutation SET (id/span/status) is
+    reproducible across runs and machines. `oracle_seconds` is wall-clock -- the one field that
+    legitimately varies -- so strip it before diffing two reports. Survivors are the findings."""
+    doc = {
+        "schema": "perturb-mutation-report/1",
+        "target": target,
+        "language": lang,
+        "oracle": test_cmd,
+        "totals": {
+            "scored": scored,
+            "killed": killed,
+            "survived": scored - killed,
+            "stillborn": sum(s["stillborn"] for s in fam_stats.values()),
+            "rate": round(100 * killed / scored) if scored else None,
+        },
+        "by_family": fam_stats,
+        "mutants": records,
+    }
+    with open(path_out, "w") as f:
+        json.dump(doc, f, indent=2, sort_keys=True)
+    print(json.dumps({"event": "report", "path": path_out, "mutants": len(records)}))
+
+
+def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False, report=None):
     src = open(path, "rb").read()
     tree = get_parser(lang).parse(src)
     stillborn_marks = tuple(_TT.LANG.get(lang, {}).get("stillborn_markers", ()))
@@ -747,6 +801,7 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False)
 
     fam_stats: dict = {}
     survivors = []
+    records = []
     backup = path + ".perturb-orig"
     shutil.copy(path, backup)
     try:
@@ -756,6 +811,10 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False)
             st = fam_stats.setdefault(fam, {"killed": 0, "survived": 0, "stillborn": 0})
             verdict = classify_verdict(rc, out, stillborn_marks)
             st[verdict] += 1
+            if report is not None:
+                records.append(
+                    _mutant_record(path, lang, test_cmd, src, start, end, repl, fam, label, verdict, secs)
+                )
             if verdict == "survived":
                 if not search:
                     survivors.append(label)
@@ -804,6 +863,8 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False)
             }
         )
     )
+    if report is not None:
+        _write_report(report, path, lang, test_cmd, fam_stats, total_k, total_scored, records)
     return 0
 
 
@@ -1044,6 +1105,7 @@ def main():
     p.add_argument("--n", type=int, default=20)
     p.add_argument("--timeout", type=int, default=180)
     p.add_argument("--cwd", default=None)
+    p.add_argument("--report", default=None, help="write a JSON mutation report to this path")
     p.add_argument(
         "--ca",
         action="store_true",
@@ -1106,7 +1168,8 @@ def main():
     if a.lines:
         lo, hi = (int(x) for x in a.lines.split(":"))
     fams = [f for f in a.families.split(",") if f]
-    return sweep(a.file, a.test, lang, fams, lo, hi, a.n, a.timeout, cwd, a.search)
+    return sweep(a.file, a.test, lang, fams, lo, hi, a.n, a.timeout, cwd, a.search, a.report)
+
 
 
 if __name__ == "__main__":
