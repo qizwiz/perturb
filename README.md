@@ -38,11 +38,13 @@ inverts the gate: with a *failing* pristine and a kernel oracle (e.g. a Lean/typ
 |---|:---:|:---:|:---:|:---:|:---:|:---:|---|
 | Python | ✓ | ✓ | ✓ | ✓ | ✓ | — | reparse |
 | Lean | ✓ | ✓ | — | ✓ | — | ✓ (`.mp`/`.mpr`, `.inl`/`.inr`, …) | external (kernel via `--test`) |
-| any other grammar | ✓ | ✓ (glyph heuristic) | — | ✓ | — | — | reparse |
+| any other grammar | ✓ | ✓ (**derived** from grammar) | — | ✓ | — | — | reparse |
 
-`✓` = exercised by `--selftest`. The last row is *architecturally supported but unmeasured*: the generic
-glyph mutator and the structural families apply, but there is no per-language operator table or benchmark
-yet, so treat coverage there as a starting point, not a guarantee.
+`✓` = exercised by `--selftest`. The `code` family for the last row is **not** a glyph heuristic: perturb
+*derives* the operator swaps for any language by reading the operators off its tree-sitter grammar and
+grouping them by one universal class map (logical/equality/relational/arithmetic/bitwise), so Ruby, Java,
+C, Rust, Go, … all get operator mutation with no hand-written table. Each operator thrashes to every
+sibling in its class (extensive).
 
 The only oracle perturb **ships** is the reparse (a malformed mutant is stillborn, not counted).
 Compile-gating, type-gating, or kernel-gating is whatever command you hand to `--test` — that is the
