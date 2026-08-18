@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perturb"
+version = "0.1.0"
+description = "A program-perturbation kernel: tree-sitter code/structural/environment mutation delegated to an external oracle, with higher-order search and proof repair."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Jonathan Hill"}]
+keywords = ["mutation-testing", "tree-sitter", "fault-injection", "program-repair", "test-adequacy"]
+dependencies = ["tree-sitter-language-pack"]
+
+[project.urls]
+Homepage = "https://github.com/qizwiz/perturb"
+
+[project.scripts]
+perturb = "perturb_cli:main"
+ts-thrash = "ts_thrash:main"
+
+[tool.setuptools]
+py-modules = ["perturb_cli", "ts_thrash"]
