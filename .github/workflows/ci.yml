@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: install perturb + pytest
-        run: pip install . pytest
+        run: pip install . pytest jsonschema
       - name: determinism guard (.pyc-staleness regression)
         run: python3 -m pytest tests/ -q
       - name: self-hosting mutation test (informational artifact)

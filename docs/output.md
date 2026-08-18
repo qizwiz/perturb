@@ -111,6 +111,17 @@ reports (`tests/test_report.py` does exactly this).
 }
 ```
 
+## Stryker-compatible export
+
+`perturb FILE --test 'CMD' --stryker report.json` writes the [Stryker `mutation-testing-elements`](https://stryker-mutator.io/docs/mutation-testing-elements/) schema (schemaVersion 1), so perturb's results render in the Stryker HTML report and the hosted [dashboard](https://dashboard.stryker-mutator.io) -- interop, not a second ecosystem. The output is validated against the real schema in CI (`tests/test_stryker.py`, schema bundled at `tests/stryker_report_schema.json`).
+
+- status maps: `killed -> Killed`, `survived -> Survived`, `stillborn -> CompileError`
+- locations are 1-based line/column; each file entry carries its full `source`
+
+```sh
+perturb discount.py --lang python --test 'pytest test_strong.py -q' --stryker report.json
+```
+
 ## Reproducing a single mutant
 
 Every record carries a `reproduction` command, so a survivor is a one-command re-check:

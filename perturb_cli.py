@@ -773,7 +773,51 @@ def _write_report(path_out, target, lang, test_cmd, fam_stats, killed, scored, r
     print(json.dumps({"event": "report", "path": path_out, "mutants": len(records)}))
 
 
-def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False, report=None):
+def _linecol(src, off):
+    """1-based line and column (both start at 1, per the Stryker schema). Column is measured in
+    DECODED characters so it aligns with the `source` string the viewer renders."""
+    line = src.count(b"\n", 0, off) + 1
+    nl = src.rfind(b"\n", 0, off)
+    col = len(src[nl + 1:off].decode("utf-8", "replace")) + 1
+    return {"line": line, "column": col}
+
+
+_STRYKER_STATUS = {"killed": "Killed", "survived": "Survived", "stillborn": "CompileError"}
+
+
+def _write_stryker(path_out, target, lang, src, records):
+    """Export to the Stryker mutation-testing-elements schema (schemaVersion 1) so perturb's
+    results render in the Stryker HTML report and hosted dashboard -- interop, not a 2nd ecosystem."""
+    mutants = [
+        {
+            "id": r["id"],
+            "mutatorName": r["family"],
+            "replacement": r["replacement"],
+            "location": {
+                "start": _linecol(src, r["span"]["start"]),
+                "end": _linecol(src, r["span"]["end"]),
+            },
+            "status": _STRYKER_STATUS.get(r["status"], "Survived"),
+        }
+        for r in records
+    ]
+    doc = {
+        "schemaVersion": "1",
+        "thresholds": {"high": 80, "low": 60},
+        "files": {
+            target: {
+                "language": lang,
+                "source": src.decode("utf-8", "replace"),
+                "mutants": mutants,
+            }
+        },
+    }
+    with open(path_out, "w") as f:
+        json.dump(doc, f, indent=2, sort_keys=True)
+    print(json.dumps({"event": "stryker-report", "path": path_out, "mutants": len(mutants)}))
+
+
+def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False, report=None, stryker=None):
     src = open(path, "rb").read()
     tree = get_parser(lang).parse(src)
     stillborn_marks = tuple(_TT.LANG.get(lang, {}).get("stillborn_markers", ()))
@@ -811,7 +855,7 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False,
             st = fam_stats.setdefault(fam, {"killed": 0, "survived": 0, "stillborn": 0})
             verdict = classify_verdict(rc, out, stillborn_marks)
             st[verdict] += 1
-            if report is not None:
+            if report is not None or stryker is not None:
                 records.append(
                     _mutant_record(path, lang, test_cmd, src, start, end, repl, fam, label, verdict, secs)
                 )
@@ -865,6 +909,8 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False,
     )
     if report is not None:
         _write_report(report, path, lang, test_cmd, fam_stats, total_k, total_scored, records)
+    if stryker is not None:
+        _write_stryker(stryker, path, lang, src, records)
     return 0
 
 
@@ -1106,6 +1152,7 @@ def main():
     p.add_argument("--timeout", type=int, default=180)
     p.add_argument("--cwd", default=None)
     p.add_argument("--report", default=None, help="write a JSON mutation report to this path")
+    p.add_argument("--stryker", default=None, help="write a Stryker-schema report to this path")
     p.add_argument(
         "--ca",
         action="store_true",
@@ -1168,7 +1215,8 @@ def main():
     if a.lines:
         lo, hi = (int(x) for x in a.lines.split(":"))
     fams = [f for f in a.families.split(",") if f]
-    return sweep(a.file, a.test, lang, fams, lo, hi, a.n, a.timeout, cwd, a.search, a.report)
+    return sweep(a.file, a.test, lang, fams, lo, hi, a.n, a.timeout, cwd, a.search, a.report, a.stryker)
+
 
 
 

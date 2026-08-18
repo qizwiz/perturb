@@ -87,6 +87,13 @@ reproduction command per mutant (see [docs/output.md](docs/output.md)):
 ./perturb mymodule.py --test 'pytest -q' --report mutation.json
 ```
 
+Or a **Stryker-compatible** report -- it validates against the real `mutation-testing-elements`
+schema (checked in CI), so it loads in the [Stryker dashboard](https://dashboard.stryker-mutator.io):
+
+```sh
+./perturb mymodule.py --test 'pytest -q' --stryker report.json
+```
+
 ## It passes its own mutation test
 
 `./perturb --selftest` runs 41 discrimination cases: every family fires and compiles a valid mutant,
