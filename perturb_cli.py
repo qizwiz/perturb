@@ -228,9 +228,13 @@ def fam_lean_proof(node, src, lang):
     if lang != "lean" or node.child_count != 0 or not node.is_named:
         return
     text = src[node.start_byte : node.end_byte].decode("utf-8", "replace")
-    if text in LEAN_PROOF_SWAPS:
-        rep = LEAN_PROOF_SWAPS[text]
-        yield (node.start_byte, node.end_byte, rep, "lean:%s->%s" % (text, rep))
+    # the lean grammar tokenizes a projection like `h.mpr` as ONE dotted identifier, so the
+    # swappable token is the segment AFTER the last dot -- mutate just that segment's byte span.
+    tail = text.rsplit(".", 1)[-1]
+    if tail in LEAN_PROOF_SWAPS:
+        rep = LEAN_PROOF_SWAPS[tail]
+        off = node.end_byte - len(tail.encode())
+        yield (off, node.end_byte, rep, "lean:%s->%s" % (tail, rep))
 
 
 def _parses_clean(src_bytes, lang):
@@ -1072,6 +1076,16 @@ def _selftest():
         "site-depth-nonzero",
         max(_depth_at(ctree.root_node, c[0], c[1]) for c in csites) >= 2,
     )
+
+    # Lean proof-token family fires on a DOTTED identifier and swaps only the tail. Regression:
+    # the grammar tokenizes `h.mpr` as ONE identifier, so a whole-token match never fired.
+    lp = b"theorem t : q := h.mpr hp\n"
+    lc = candidates(lp, get_parser("lean").parse(lp), "lean", ["code"], 1, 99)
+    lhit = [c for c in lc if "lean:mpr->mp" in c[4]]
+    check("lean-proof-fires-on-dotted-id", len(lhit) == 1)
+    if lhit:
+        m = lp[: lhit[0][0]] + lhit[0][2].encode() + lp[lhit[0][1] :]
+        check("lean-proof-swaps-tail-only", b"h.mp hp" in m and b"h.mpr" not in m)
 
     # classify_verdict: the pure oracle-verdict decision shared by sweep + ca_sweep
     check("verdict-survived", classify_verdict(0, "ok", ("error[",)) == "survived")
