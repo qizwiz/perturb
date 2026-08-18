@@ -1077,6 +1077,14 @@ def _selftest():
         max(_depth_at(ctree.root_node, c[0], c[1]) for c in csites) >= 2,
     )
 
+    # TypeScript: the RICH table (=== / !== / && / arithmetic) fires and every mutant re-parses.
+    tsrc = b"function f(a: number, b: number) { if (a === b && a < b) return a + b * 2; return a || b; }\n"
+    tsc = candidates(tsrc, get_parser("typescript").parse(tsrc), "typescript", ["code"], 1, 99)
+    check("ts-rich-fires(%d>=6)" % len(tsc), len(tsc) >= 6)
+    check("ts-has-strict-eq-swap", any("===->!==" in c[4] for c in tsc))
+    tsok = all(_parses_clean(tsrc[:s2] + r.encode() + tsrc[e2:], "typescript") for s2, e2, r, f2, _l in tsc)
+    check("ts-mutant-parses-clean", tsok)
+
     # Lean proof-token family fires on a DOTTED identifier and swaps only the tail. Regression:
     # the grammar tokenizes `h.mpr` as ONE identifier, so a whole-token match never fired.
     lp = b"theorem t : q := h.mpr hp\n"

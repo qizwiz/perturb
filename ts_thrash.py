@@ -26,7 +26,7 @@ import subprocess
 import sys
 import time
 
-from tree_sitter_language_pack import get_parser
+from tree_sitter_language_pack import get_language as _get_language, get_parser
 
 # ---------------------------------------------------------------- language tables
 # Operator token swaps: applied when the token is the TEXT of an operator child
@@ -38,6 +38,51 @@ OP_SWAPS = {
     "in": "not in", "is": "is not",
 }
 BOOL_SWAPS = {"True": "False", "False": "True", "true": "false", "false": "true", "t": "nil"}
+
+# The ONE universal input: operator-symbol CLASSES. Which operators a language actually HAS is read
+# from its tree-sitter grammar (below), so adding a language needs no hand-written operator list --
+# this is what lets perturb's operator mutation generalize across every tree-sitter language.
+_OP_CLASSES = (
+    ("&&", "||", "and", "or"),
+    ("==", "!=", "===", "!=="),
+    ("<", ">", "<=", ">="),
+    ("+", "-", "*", "/", "%", "**"),
+    ("&", "|", "^", "<<", ">>"),
+)
+_SWAPS_CACHE = {}
+
+
+def derive_swaps(lang):
+    """Operator swaps DERIVED from tree-sitter's node kinds + the universal classes above. The
+    operators PRESENT are read off the grammar; within a class each swaps to the next sibling."""
+    if lang not in _SWAPS_CACHE:
+        try:
+            lg = _get_language(lang)
+            present = {lg.node_kind_for_id(i) for i in range(lg.node_kind_count)}
+        except Exception:
+            present = None
+        swaps = {}
+        for cls in _OP_CLASSES:
+            avail = [o for o in cls if present is None or o in present]
+            for o in avail:
+                sibs = tuple(x for x in avail if x != o)
+                if sibs:
+                    swaps[o] = sibs  # EXTENSIVE: thrash to EVERY sibling in the class, not just one
+        _SWAPS_CACHE[lang] = swaps
+    return _SWAPS_CACHE[lang]
+
+
+# TypeScript / JavaScript: operators DERIVED from the grammar, not a hand list.
+_TSJS = dict(
+    binary_nodes={"binary_expression"},
+    bool_nodes={"true", "false"},
+    int_nodes={"number"},
+    if_nodes={"if_statement", "while_statement"},
+    negate=lambda cond: "(!%s)" % cond,
+    swaps=derive_swaps("typescript"),
+
+    stillborn_markers=("error TS", "SyntaxError", "Parsing error", "TSError"),
+)
 
 LANG = {
     "python": dict(
@@ -83,9 +128,13 @@ LANG = {
         pred_heads={"stringp", "string-match-p", "string-match", "string-prefix-p",
                     "string-suffix-p", "memq", "member", "assq", "boundp", "fboundp", "null"},
     ),
+    "typescript": _TSJS,
+    "javascript": _TSJS,
+    "tsx": _TSJS,
 }
 
-EXT = {".py": "python", ".go": "go", ".sh": "bash", ".bash": "bash", ".el": "elisp"}
+EXT = {".py": "python", ".go": "go", ".sh": "bash", ".bash": "bash", ".el": "elisp",
+       ".ts": "typescript", ".tsx": "tsx", ".js": "javascript", ".mjs": "javascript", ".cjs": "javascript"}
 
 
 def detect_lang(path, src):
@@ -109,15 +158,18 @@ def walk(node):
 def candidates(tree, src_bytes, table: dict, lo, hi):
     """(start, end, replacement, line, op) for every single-span mutation in [lo,hi]."""
     out = []
+    swaps = table.get("swaps", OP_SWAPS)
     for node in walk(tree.root_node):
         line = node.start_point[0] + 1
         if not (lo <= line <= hi):
             continue
         text = src_bytes[node.start_byte:node.end_byte].decode("utf-8", "replace")
         # operator swap: an operator-ish token inside a binary node
-        if node.parent is not None and node.parent.type in table["binary_nodes"]:
-            if text in OP_SWAPS and node.child_count == 0:
-                out.append((node.start_byte, node.end_byte, OP_SWAPS[text], line, "op:%s->%s" % (text, OP_SWAPS[text])))
+        if node.parent is not None and node.parent.type in table["binary_nodes"] and node.child_count == 0:
+            tgt = swaps.get(text)
+            for r in (() if tgt is None else (tgt,) if isinstance(tgt, str) else tgt):
+                out.append((node.start_byte, node.end_byte, r, line, "op:%s->%s" % (text, r)))
+
         # boolean flip
         if node.type in table["bool_nodes"] and text in BOOL_SWAPS:
             out.append((node.start_byte, node.end_byte, BOOL_SWAPS[text], line, "bool:%s" % text))
