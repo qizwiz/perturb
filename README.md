@@ -1,8 +1,15 @@
 # perturb
 
-A language-agnostic **mutation-testing engine** built on [tree-sitter](https://tree-sitter.github.io/).
-One perturbation is a declaration — `perturb(artifact, SITE, TRANSFORM) → ORACLE` — and a *surviving*
-mutant is a finding: a place your test suite can't tell the mutated program from the original.
+A **program-perturbation kernel** built on [tree-sitter](https://tree-sitter.github.io/): it generates
+code, structural, and environment faults, delegates truth to an external oracle, and can invert the
+mutation loop into constrained proof/program repair. One perturbation is a declaration —
+`perturb(artifact, SITE, TRANSFORM) → ORACLE` — and a *surviving* mutant is a finding: a place your
+test suite can't tell the mutated program from the original.
+
+The architecture is **language-general** — tree-sitter parses everything — but the *coverage is not
+uniform*, and this README won't pretend otherwise (see [Language support](#language-support)). Generic
+operator mutation and the structural families (`reorder`/`shrink`) work on any grammar; the `time` and
+`absence` families are Python-specific today.
 
 Where most mutation tools only swap operators, perturb treats the AST as a **graph** and mutates its
 *shape*, and it can perturb the **environment**, not just the code:
@@ -20,6 +27,26 @@ source of truth and no drift. It also has a **cellular-automaton mode** (`--ca`)
 (coupled) mutants over the mutation sites, and a **proof-repair search mode** (`--search`) that
 inverts the gate: with a *failing* pristine and a kernel oracle (e.g. a Lean/type checker), a
 *surviving* mutant is a **repair**.
+
+## Language support
+
+`language-general` means the *pipeline* (parse → find sites → splice → reparse) runs on any grammar
+[`tree-sitter-language-pack`](https://github.com/Goldziher/tree-sitter-language-pack) ships. It does
+**not** mean every family is meaningful everywhere. What is actually exercised:
+
+| Language | parse | generic `code` | rich operator table | `reorder`/`shrink` | `time`/`absence` | proof tokens | gate shipped |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|---|
+| Python | ✓ | ✓ | ✓ | ✓ | ✓ | — | reparse |
+| Lean | ✓ | ✓ | — | ✓ | — | ✓ (`.mp`/`.mpr`, `.inl`/`.inr`, …) | external (kernel via `--test`) |
+| any other grammar | ✓ | ✓ (glyph heuristic) | — | ✓ | — | — | reparse |
+
+`✓` = exercised by `--selftest`. The last row is *architecturally supported but unmeasured*: the generic
+glyph mutator and the structural families apply, but there is no per-language operator table or benchmark
+yet, so treat coverage there as a starting point, not a guarantee.
+
+The only oracle perturb **ships** is the reparse (a malformed mutant is stillborn, not counted).
+Compile-gating, type-gating, or kernel-gating is whatever command you hand to `--test` — that is the
+point: truth lives in the oracle, not in perturb.
 
 ## Install
 

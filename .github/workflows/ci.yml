@@ -1,0 +1,27 @@
+name: selftest
+
+# perturb's own mutation test IS its CI: 41 discrimination cases prove every
+# family fires and compiles a valid mutant. A red here means a family stopped
+# discriminating — exactly the failure perturb exists to catch in other suites.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  selftest:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: install
+        run: pip install -r requirements.txt
+      - name: perturb --selftest (41 discrimination cases)
+        run: python3 perturb --selftest
