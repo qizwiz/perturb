@@ -293,11 +293,32 @@ def candidates(src_bytes, tree, lang, families, lo, hi):
     return uniq
 
 
+# A distinct, strictly-increasing WHOLE-SECOND mtime per mutant. Python stores the source
+# mtime at one-second resolution in the .pyc header, so two mutants written in the SAME
+# second reuse a stale cached bytecode and an import-based oracle silently scores the WRONG
+# program -- non-deterministic, under-counted survivors. perturb found this by thrashing itself.
+_MUTANT_TICK = 0
+
+
+def _write_mutant(path, data):
+    global _MUTANT_TICK
+    with open(path, "wb") as f:
+        f.write(data)
+    _MUTANT_TICK += 2
+    mt = int(time.time()) + _MUTANT_TICK
+    os.utime(path, (mt, mt))
+
+
+# Belt-and-suspenders: stop the oracle writing new .pyc so a later run cannot trust one either.
+_ORACLE_ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+
 def run_oracle(cmd, cwd, timeout):
     t0 = time.monotonic()
     try:
         r = subprocess.run(
-            cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout
+            cmd, shell=True, cwd=cwd, capture_output=True, text=True,
+            timeout=timeout, env=_ORACLE_ENV,
         )
         return r.returncode, (r.stdout + r.stderr), round(time.monotonic() - t0, 1)
     except subprocess.TimeoutExpired:
@@ -642,10 +663,11 @@ def ca_sweep(
             chosen = [sites[i] for i in idxs]
             if not chosen:
                 continue
-            open(path, "wb").write(
-                _apply_multi(src, [(c[0], c[1], c[2]) for c in chosen])
+            _write_mutant(
+                path, _apply_multi(src, [(c[0], c[1], c[2]) for c in chosen])
             )
             rc, out, secs = run_oracle(test_cmd, cwd, timeout)
+
             verdict = classify_verdict(rc, out, stillborn_marks)
             labels = [c[4] for c in chosen]
             results.append((g, len(chosen), verdict, labels))
@@ -729,7 +751,7 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False)
     shutil.copy(path, backup)
     try:
         for start, end, repl, fam, label in cands:
-            open(path, "wb").write(src[:start] + repl.encode() + src[end:])
+            _write_mutant(path, src[:start] + repl.encode() + src[end:])
             rc, out, secs = run_oracle(test_cmd, cwd, timeout)
             st = fam_stats.setdefault(fam, {"killed": 0, "survived": 0, "stillborn": 0})
             verdict = classify_verdict(rc, out, stillborn_marks)
