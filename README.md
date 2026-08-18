@@ -113,6 +113,9 @@ non-deterministically. `tests/test_determinism.py` guards the fix.
   coverage can't see. `./demos/green_ai_suite/run.sh`.
 - [`demos/self_hosting`](demos/self_hosting) — perturb mutation-testing its own engine.
   `./demos/self_hosting/run.sh`.
+- [`docs/case-study-cachetools.md`](docs/case-study-cachetools.md) — perturb on **cachetools**
+  (a real, 312-test library): a 98% mutation score, a schema-valid Stryker report on real code, and
+  an honestly-triaged survivor.
 - [`demos/lean_proof_repair`](demos/lean_proof_repair) — perturb run *backwards* (`--search`): a
   broken Lean proof, repaired by a single token swap the **Lean kernel** certifies — the one thing no
   operator-only mutation tool does (needs Lean 4). `./demos/lean_proof_repair/run.sh`.
