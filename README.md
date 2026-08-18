@@ -115,6 +115,9 @@ non-deterministically. `tests/test_determinism.py` guards the fix.
   coverage can't see. `./demos/green_ai_suite/run.sh`.
 - [`demos/self_hosting`](demos/self_hosting) — perturb mutation-testing its own engine.
   `./demos/self_hosting/run.sh`.
+- [`docs/case-study-stryker.md`](docs/case-study-stryker.md) — perturb on **Stryker** itself (the
+  mutation-tester, mutation-tested): 65% on `deep-merge.ts` vs Stryker's own suite, real survivors,
+  all via TypeScript operators derived from the grammar.
 - [`docs/case-study-cachetools.md`](docs/case-study-cachetools.md) — perturb on **cachetools**
   (a real, 312-test library): a 98% mutation score, a schema-valid Stryker report on real code, and
   an honestly-triaged survivor.
