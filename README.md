@@ -51,6 +51,12 @@ point: truth lives in the oracle, not in perturb.
 ## Install
 
 ```sh
+pipx install git+https://github.com/qizwiz/perturb.git   # gives you the `perturb` command
+```
+
+or from a checkout — `./perturb` works without installing:
+
+```sh
 pip install tree-sitter-language-pack
 git clone https://github.com/qizwiz/perturb && cd perturb
 ```
@@ -78,8 +84,21 @@ Higher-order / structural search over the mutation graph:
 
 `./perturb --selftest` runs 41 discrimination cases: every family fires and compiles a valid mutant,
 the `code` family agrees with ts-thrash, the typed time-freeze is type-correct, and the structural
-families skip equivalent (commutative) mutants. perturb has also been pointed at its *own* source with
-its *own* selftest as the oracle — a self-hosting mutation test.
+families skip equivalent (commutative) mutants.
+
+perturb is also pointed at its *own* source with its *own* selftest as the oracle (a self-hosting
+mutation test — see [`demos/self_hosting`](demos/self_hosting)). That is not a slogan: it found a real
+scoring bug. Python stores a source file's mtime at one-second resolution in the `.pyc` header, so
+mutants written in the same second reused stale bytecode and killable mutants were scored *survived*,
+non-deterministically. `tests/test_determinism.py` guards the fix.
+
+## Demos
+
+- [`demos/green_ai_suite`](demos/green_ai_suite) — an AI-style test suite with **100% line coverage**
+  but a **0% mutation score**, next to a targeted suite (same coverage) that kills the mutants. The gap
+  coverage can't see. `./demos/green_ai_suite/run.sh`.
+- [`demos/self_hosting`](demos/self_hosting) — perturb mutation-testing its own engine.
+  `./demos/self_hosting/run.sh`.
 
 ## Design
 
