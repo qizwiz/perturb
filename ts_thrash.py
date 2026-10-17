@@ -271,9 +271,10 @@ def stale_backup(backup):
 def restore(path, backup, original):
     """Put the original back by WRITING THROUGH `path`: renaming the backup over it would replace
     a symlinked target with a regular file and leave the link's real file holding the last mutant.
-    The backup is removed only once the original is back."""
-    with open(path, "wb") as f:
-        f.write(original)
+    It goes through write_mutant so it is dated AFTER every mutant: mutants carry future mtimes,
+    and an original older than the artifact built from the last one would make an mtime-driven
+    build (make) keep that MUTANT build. The backup is removed only once the original is back."""
+    write_mutant(path, original)
     os.remove(backup)
 
 
