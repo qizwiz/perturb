@@ -624,6 +624,9 @@ def ca_sweep(
     cwd,
     search=False,
 ):
+    backup = path + ".perturb-orig"
+    if _TT.stale_backup(backup):
+        return 2
     src = open(path, "rb").read()
     tree = get_parser(lang).parse(src)
     stillborn_marks = tuple(_TT.LANG.get(lang, {}).get("stillborn_markers", ()))
@@ -660,7 +663,6 @@ def ca_sweep(
     )
 
     results = []
-    backup = path + ".perturb-orig"
     shutil.copy(path, backup)
     try:
         for g, idxs in enumerate(masks):
@@ -820,6 +822,9 @@ def _write_stryker(path_out, target, lang, src, records):
 
 
 def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False, report=None, stryker=None):
+    backup = path + ".perturb-orig"
+    if _TT.stale_backup(backup):
+        return 2
     src = open(path, "rb").read()
     tree = get_parser(lang).parse(src)
     stillborn_marks = tuple(_TT.LANG.get(lang, {}).get("stillborn_markers", ()))
@@ -848,7 +853,6 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False,
     fam_stats: dict = {}
     survivors = []
     records = []
-    backup = path + ".perturb-orig"
     shutil.copy(path, backup)
     try:
         for start, end, repl, fam, label in cands:

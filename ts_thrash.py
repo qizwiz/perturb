@@ -236,8 +236,23 @@ def run_oracle(cmd, cwd, timeout, env=None):
         return -9, "TIMEOUT", timeout
 
 
+def stale_backup(backup):
+    """A backup left by a run that died mid-sweep (SIGKILL, power loss) is the ONLY copy of the
+    original -- the target still holds a mutant. Copying over it would destroy the original, and
+    the mutant would be scored as the pristine. Refuse; the user restores by hand."""
+    if not os.path.exists(backup):
+        return False
+    print(json.dumps({"event": "HARNESS-ERROR", "stale_backup": backup,
+                      "note": "a previous run did not restore its target; move the backup back "
+                              "over the target (or delete it) and rerun"}))
+    return True
+
+
 def sweep(path, test_cmd, lang, lo, hi, n, timeout, cwd):
     table: dict = LANG[lang]
+    backup = path + ".tsthrash-orig"
+    if stale_backup(backup):
+        return 2
     src_bytes = open(path, "rb").read()
     tree = get_parser(lang).parse(src_bytes)
 
@@ -255,7 +270,6 @@ def sweep(path, test_cmd, lang, lo, hi, n, timeout, cwd):
 
     killed = survived = stillborn = 0
     survivors = []
-    backup = path + ".tsthrash-orig"
     shutil.copy(path, backup)
     try:
         for start, end, repl, line, op in cands:
