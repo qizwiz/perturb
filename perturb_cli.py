@@ -48,7 +48,6 @@ import json
 import os
 import shlex
 import shutil
-import subprocess
 import sys
 import time
 
@@ -320,15 +319,8 @@ _ORACLE_ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
 
 
 def run_oracle(cmd, cwd, timeout):
-    t0 = time.monotonic()
-    try:
-        r = subprocess.run(
-            cmd, shell=True, cwd=cwd, capture_output=True, text=True,
-            timeout=timeout, env=_ORACLE_ENV,
-        )
-        return r.returncode, (r.stdout + r.stderr), round(time.monotonic() - t0, 1)
-    except subprocess.TimeoutExpired:
-        return -9, "TIMEOUT", timeout
+    # ts-thrash's runner: own process group, the whole tree is killed on timeout
+    return _TT.run_oracle(cmd, cwd, timeout, env=_ORACLE_ENV)
 
 
 def classify_verdict(rc, out, stillborn_marks):

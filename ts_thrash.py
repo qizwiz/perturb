@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -216,12 +217,22 @@ def candidates(tree, src_bytes, table: dict, lo, hi):
     return uniq
 
 
-def run_oracle(cmd, cwd, timeout):
+def run_oracle(cmd, cwd, timeout, env=None):
+    """Run CMD in its OWN process group, and on timeout kill the whole group: killing only the
+    `sh -c` would orphan whatever it forked (the test runner), which keeps running -- and writing
+    -- underneath every later mutant's oracle."""
     t0 = time.monotonic()
+    p = subprocess.Popen(cmd, shell=True, cwd=cwd, env=env, text=True, start_new_session=True,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        r = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=timeout)
-        return r.returncode, (r.stdout + r.stderr), round(time.monotonic() - t0, 1)
+        out, err = p.communicate(timeout=timeout)
+        return p.returncode, (out + err), round(time.monotonic() - t0, 1)
     except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        p.communicate()
         return -9, "TIMEOUT", timeout
 
 
