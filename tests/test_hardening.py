@@ -101,6 +101,18 @@ def test_timeout_kills_the_whole_oracle_tree():
         assert not os.path.exists(os.path.join(d, "marker")), "orphaned oracle kept running"
 
 
+def test_timeout_returns_even_if_a_daemon_escaped_the_group():
+    # a fixture that daemonizes (its own session) escapes the group kill but still holds the
+    # oracle's stdout/stderr; draining the pipes after the kill would block until it exits.
+    daemon = ("%s -c \"import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', "
+              "'import time; time.sleep(4)'], start_new_session=True); time.sleep(10)\""
+              % sys.executable)
+    with tempfile.TemporaryDirectory() as d:
+        t0 = time.monotonic()
+        assert P.run_oracle(daemon, d, 1)[:2] == (-9, "TIMEOUT")
+        assert time.monotonic() - t0 < 2.5, "run_oracle blocked on an escaped daemon's pipe"
+
+
 # ---- 5. a stale backup from a killed run was OVERWRITTEN, destroying the only original ---------
 def test_stale_backup_is_never_overwritten():
     with tempfile.TemporaryDirectory() as d:

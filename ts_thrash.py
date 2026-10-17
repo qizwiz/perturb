@@ -252,7 +252,10 @@ def run_oracle(cmd, cwd, timeout, env=ORACLE_ENV):
             os.killpg(p.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
-        p.communicate()
+        # wait(), not communicate(): a daemon that escaped the group may still hold the pipes
+        p.wait()
+        p.stdout.close()
+        p.stderr.close()
         return -9, "TIMEOUT", timeout
 
 
