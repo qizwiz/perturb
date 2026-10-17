@@ -368,19 +368,25 @@ def elementary_ca(rule, row, gens):
 
 
 def _one_per_site(cands):
-    """One canonical swap per operator site (dedupe by start byte, keep the first replacement)."""
-    seen, out = set(), []
-    for c in sorted(cands, key=lambda x: x[0]):
-        if c[0] not in seen:
-            seen.add(c[0])
-            out.append(c)
-    return out
+    """One canonical swap per site, with NO two sites overlapping -- a HOM splices them all at
+    once, and an enclosing edit (negate-if over `a < b`) would clobber or misalign an inner one
+    (op:< inside it). Narrowest span wins, so operator sites beat the conditions that hold them;
+    ties keep the first replacement. Returned in start order."""
+    kept = []
+    for c in sorted(cands, key=lambda x: (x[1] - x[0], x[0])):
+        if all(c[1] <= k[0] or c[0] >= k[1] for k in kept):
+            kept.append(c)
+    return sorted(kept, key=lambda x: x[0])
 
 
 def _apply_multi(src, edits):
     """Splice several non-overlapping (start, end, repl) edits into one mutant. Descending order
     keeps earlier byte offsets valid as later ones are replaced."""
-    for start, end, repl in sorted(edits, key=lambda e: e[0], reverse=True):
+    edits = sorted(edits, key=lambda e: e[0], reverse=True)
+    for later, earlier in zip(edits, edits[1:]):
+        if earlier[1] > later[0]:
+            raise ValueError("overlapping edits %r and %r" % (earlier[:2], later[:2]))
+    for start, end, repl in edits:
         src = src[:start] + repl.encode() + src[end:]
     return src
 
