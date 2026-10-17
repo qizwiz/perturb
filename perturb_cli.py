@@ -1159,7 +1159,7 @@ def main():
     p.add_argument("--families", default="code,time,absence")
     p.add_argument("--lang", default=None)
     p.add_argument("--lines", default=None)
-    p.add_argument("--n", type=int, default=20)
+    p.add_argument("--n", type=_TT.positive_int, default=20)
     p.add_argument("--timeout", type=int, default=180)
     p.add_argument("--cwd", default=None)
     p.add_argument("--report", default=None, help="write a JSON mutation report to this path")

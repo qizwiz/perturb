@@ -368,6 +368,14 @@ def _selftest():
     return 0
 
 
+def positive_int(text):
+    """argparse type for counts (--n): 0 used to crash the sampler with ZeroDivisionError."""
+    v = int(text)
+    if v < 1:
+        raise argparse.ArgumentTypeError("must be >= 1, got %d" % v)
+    return v
+
+
 def main():
     if "--selftest" in sys.argv:
         return _selftest()
@@ -376,7 +384,7 @@ def main():
     p.add_argument("--test", required=True, help="kill oracle command (run from --cwd)")
     p.add_argument("--lang", default=None)
     p.add_argument("--lines", default=None, help="LO:HI line range (default: whole file)")
-    p.add_argument("--n", type=int, default=12)
+    p.add_argument("--n", type=positive_int, default=12)
     p.add_argument("--timeout", type=int, default=180)
     p.add_argument("--cwd", default=None)
     a = p.parse_args()
