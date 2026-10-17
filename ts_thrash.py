@@ -217,7 +217,27 @@ def candidates(tree, src_bytes, table: dict, lo, hi):
     return uniq
 
 
-def run_oracle(cmd, cwd, timeout, env=None):
+# A distinct, strictly-increasing WHOLE-SECOND mtime per mutant. Python stores the source
+# mtime at one-second resolution in the .pyc header, so two mutants written in the SAME
+# second reuse a stale cached bytecode and an import-based oracle silently scores the WRONG
+# program -- non-deterministic, under-counted survivors. perturb found this by thrashing itself.
+_MUTANT_TICK = 0
+
+
+def write_mutant(path, data):
+    global _MUTANT_TICK
+    with open(path, "wb") as f:
+        f.write(data)
+    _MUTANT_TICK += 2
+    mt = int(time.time()) + _MUTANT_TICK
+    os.utime(path, (mt, mt))
+
+
+# Belt-and-suspenders: stop the oracle writing new .pyc so a later run cannot trust one either.
+ORACLE_ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+
+
+def run_oracle(cmd, cwd, timeout, env=ORACLE_ENV):
     """Run CMD in its OWN process group, and on timeout kill the whole group: killing only the
     `sh -c` would orphan whatever it forked (the test runner), which keeps running -- and writing
     -- underneath every later mutant's oracle."""
@@ -273,8 +293,7 @@ def sweep(path, test_cmd, lang, lo, hi, n, timeout, cwd):
     shutil.copy(path, backup)
     try:
         for start, end, repl, line, op in cands:
-            mutant = src_bytes[:start] + repl.encode() + src_bytes[end:]
-            open(path, "wb").write(mutant)
+            write_mutant(path, src_bytes[:start] + repl.encode() + src_bytes[end:])
             rc, out, secs = run_oracle(test_cmd, cwd, timeout)
             if rc == 0:
                 verdict = "survived"

@@ -49,7 +49,6 @@ import os
 import shlex
 import shutil
 import sys
-import time
 
 from tree_sitter_language_pack import get_parser
 
@@ -298,29 +297,15 @@ def candidates(src_bytes, tree, lang, families, lo, hi):
     return uniq
 
 
-# A distinct, strictly-increasing WHOLE-SECOND mtime per mutant. Python stores the source
-# mtime at one-second resolution in the .pyc header, so two mutants written in the SAME
-# second reuse a stale cached bytecode and an import-based oracle silently scores the WRONG
-# program -- non-deterministic, under-counted survivors. perturb found this by thrashing itself.
-_MUTANT_TICK = 0
-
-
-def _write_mutant(path, data):
-    global _MUTANT_TICK
-    with open(path, "wb") as f:
-        f.write(data)
-    _MUTANT_TICK += 2
-    mt = int(time.time()) + _MUTANT_TICK
-    os.utime(path, (mt, mt))
-
-
-# Belt-and-suspenders: stop the oracle writing new .pyc so a later run cannot trust one either.
-_ORACLE_ENV = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+# The .pyc-staleness guard (distinct whole-second mtime per mutant + an oracle that writes no
+# bytecode) lives in ts-thrash -- ONE source, so both tools score the program actually written.
+_write_mutant = _TT.write_mutant
+_ORACLE_ENV = _TT.ORACLE_ENV
 
 
 def run_oracle(cmd, cwd, timeout):
     # ts-thrash's runner: own process group, the whole tree is killed on timeout
-    return _TT.run_oracle(cmd, cwd, timeout, env=_ORACLE_ENV)
+    return _TT.run_oracle(cmd, cwd, timeout)
 
 
 def classify_verdict(rc, out, stillborn_marks):
