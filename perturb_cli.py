@@ -843,13 +843,7 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False,
         for start, end, repl, fam, label in cands:
             _write_mutant(path, src[:start] + repl.encode() + src[end:])
             rc, out, secs = run_oracle(test_cmd, cwd, timeout)
-            st = fam_stats.setdefault(fam, {"killed": 0, "survived": 0, "stillborn": 0})
             verdict = classify_verdict(rc, out, stillborn_marks)
-            st[verdict] += 1
-            if report is not None or stryker is not None:
-                records.append(
-                    _mutant_record(path, lang, test_cmd, src, start, end, repl, fam, label, verdict, secs)
-                )
             if verdict == "survived":
                 if not search:
                     survivors.append(label)
@@ -857,8 +851,10 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False,
                     # RE-VERIFY: a survivor is a CANDIDATE, not a confirmed repair. The oracle can be
                     # transiently STALE (e.g. meta-lean's shared box path); a TRUE repair survives a
                     # second independent check. `path` still holds this mutant, so re-run the test.
+                    # A rejected candidate is scored KILLED (as ca_sweep does), not survived.
                     rc2, _o2, _s2 = run_oracle(test_cmd, cwd, timeout)
                     if rc2 != 0:
+                        verdict = "killed"
                         print(json.dumps({"event": "REPAIR-REJECTED", "label": label}))
                     else:
                         survivors.append(label)
@@ -867,6 +863,12 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False,
                         print(
                             json.dumps({"event": "REPAIR", "label": label, "saved": rp})
                         )
+            st = fam_stats.setdefault(fam, {"killed": 0, "survived": 0, "stillborn": 0})
+            st[verdict] += 1
+            if report is not None or stryker is not None:
+                records.append(
+                    _mutant_record(path, lang, test_cmd, src, start, end, repl, fam, label, verdict, secs)
+                )
             print(
                 json.dumps(
                     {
