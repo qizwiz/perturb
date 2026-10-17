@@ -268,6 +268,15 @@ def stale_backup(backup):
     return True
 
 
+def restore(path, backup, original):
+    """Put the original back by WRITING THROUGH `path`: renaming the backup over it would replace
+    a symlinked target with a regular file and leave the link's real file holding the last mutant.
+    The backup is removed only once the original is back."""
+    with open(path, "wb") as f:
+        f.write(original)
+    os.remove(backup)
+
+
 def sweep(path, test_cmd, lang, lo, hi, n, timeout, cwd):
     table: dict = LANG[lang]
     backup = path + ".tsthrash-orig"
@@ -307,7 +316,7 @@ def sweep(path, test_cmd, lang, lo, hi, n, timeout, cwd):
                 killed += 1
             print(json.dumps({"event": "mutant", "line": line, "op": op, "verdict": verdict, "secs": secs}))
     finally:
-        shutil.move(backup, path)
+        restore(path, backup, src_bytes)
 
     scored = killed + survived
     print(json.dumps({"event": "done", "killed": killed, "survived": survived,

@@ -688,7 +688,7 @@ def ca_sweep(
                 )
             )
     finally:
-        shutil.move(backup, path)
+        _TT.restore(path, backup, src)
 
     surviving = [(g, o, ls) for g, o, v, ls in results if v == "survived"]
     print(
@@ -879,7 +879,7 @@ def sweep(path, test_cmd, lang, families, lo, hi, n, timeout, cwd, search=False,
                 )
             )
     finally:
-        shutil.move(backup, path)
+        _TT.restore(path, backup, src)
 
     for fam, st in fam_stats.items():
         scored = st["killed"] + st["survived"]
