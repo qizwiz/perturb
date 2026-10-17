@@ -198,6 +198,21 @@ def test_restored_file_is_newer_than_every_mutant():
         assert os.stat(os.path.join(d, "m.py")).st_mtime > max(seen)
 
 
+# ---- 11. the ./perturb and ./ts-thrash shims DROPPED the exit status --------------------------
+@pytest.mark.parametrize("shim", ["perturb", "ts-thrash"])
+def test_shim_propagates_exit_status(shim):
+    # main() returns 2 on a failing pristine (and 1 on a failing --selftest), but the shim called
+    # main() without sys.exit, so it always exited 0 -- CI's `python3 perturb --selftest` step
+    # could never go red.
+    with tempfile.TemporaryDirectory() as d:
+        _workdir(d)
+        r = subprocess.run(
+            [sys.executable, os.path.join(REPO, shim), "m.py", "--lang", "python", "--test", "false"],
+            cwd=d, capture_output=True, text=True,
+        )
+        assert "HARNESS-ERROR" in r.stdout and r.returncode == 2, (r.returncode, r.stdout)
+
+
 # ---- 10. --n 0 crashed with ZeroDivisionError ------------------------------------------------
 def test_n_must_be_positive():
     with tempfile.TemporaryDirectory() as d:
