@@ -144,10 +144,13 @@ def fam_reorder(node, src, lang):
 def fam_shrink(node, src, lang):
     if node.type not in ("block", "module"):
         return
-    kids = [c for c in node.children if c.is_named]
+    # comments are not statements: deleting one (or `pass` -> `pass`) is an EQUIVALENT mutant,
+    # a guaranteed false survivor
+    kids = [c for c in node.children if c.is_named and c.type != "comment"]
     for i, k in enumerate(kids):
         if len(kids) == 1:
-            yield (k.start_byte, k.end_byte, "pass", "shrink:del-%s" % k.type)
+            if src[k.start_byte:k.end_byte] != b"pass":
+                yield (k.start_byte, k.end_byte, "pass", "shrink:del-%s" % k.type)
         elif i + 1 < len(kids):
             yield (k.start_byte, kids[i + 1].start_byte, "", "shrink:del-%s" % k.type)
         else:
