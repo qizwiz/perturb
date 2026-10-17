@@ -58,17 +58,12 @@ from tree_sitter_language_pack import get_parser
 import ts_thrash as _TT
 
 FROZEN_FLOAT = "1754400000.0"
+FROZEN_NS = "1754400000000000000"  # the same instant as an int of nanoseconds, for the *_ns clocks
 FROZEN_DT = "__import__('datetime').datetime(2025, 8, 5, 12, 0, 0)"
 
 # ---- family: TIME (typed clock freeze) -----------------------------------------------------------
-FLOAT_CLOCKS = {
-    "time",
-    "time_ns",
-    "monotonic",
-    "perf_counter",
-    "monotonic_ns",
-    "perf_counter_ns",
-}
+FLOAT_CLOCKS = {"time", "monotonic", "perf_counter"}
+INT_NS_CLOCKS = {"time_ns", "monotonic_ns", "perf_counter_ns"}  # int, not float: `& 0xFF`, `//`, range()
 DATETIME_CLOCKS = {"utcnow", "now", "today", "utcfromtimestamp"}
 
 
@@ -88,6 +83,8 @@ def fam_time(node, src, lang):
     name, argc = _call_name(node, src)
     if name in FLOAT_CLOCKS and argc == 0:
         return (node.start_byte, node.end_byte, FROZEN_FLOAT, "freeze-float:%s" % name)
+    if name in INT_NS_CLOCKS and argc == 0:
+        return (node.start_byte, node.end_byte, FROZEN_NS, "freeze-int:%s" % name)
     if name in DATETIME_CLOCKS and argc == 0:
         return (node.start_byte, node.end_byte, FROZEN_DT, "freeze-datetime:%s" % name)
     return None
